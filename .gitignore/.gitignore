@@ -1,0 +1,99 @@
+Sub 通用发送邮件()
+'On Error Resume Next
+Dim cm As Variant
+UserForm1.Show
+UserName = UserForm1.ComboBox1
+UserPass = UserForm1.TextBox1.Value
+With Application.FileDialog(msoFileDialogFolderPicker)
+.InitialFileName = ActiveWorkbook.Path & "\"
+If .Show = -1 Then
+Pth = Application.FileDialog(msoFileDialogFolderPicker).SelectedItems.Item(1) & "\"
+End If
+End With
+'定义文件夹
+Dim FS, F, FF, Fil, BName, EName
+Set FS = CreateObject("Scripting.FileSystemObject")
+Set F = FS.GetFolder(Pth)
+Set FF = F.Files
+If FF Is Nothing Or F Is Nothing Then
+MsgBox ("文件或文件夹错误,请查证在本文件目录内存在'拆分'文件夹,并且已经生成拆分文件")
+Exit Sub
+End If
+'保存文件信息
+Dim FN(1 To 10000, 1 To 3)
+i = 0
+For Each Fil In FF
+i = i + 1
+FN(i, 1) = FS.GetBaseName(Fil)
+FN(i, 2) = FS.GetExtensionName(Fil)
+FN(i, 3) = Left(FN(i, 1), InStr(1, FN(i, 1), "-") - 1)
+Next
+Set Sht = ThisWorkbook.Sheets("邮件联系人")
+colnew = Sht.Cells(1, Columns.Count).End(xlToLeft).Column + 1 '联系人空白列(用于记录发送结果)
+Sht.Cells(1, colnew).Value = Pth & Chr(10) & Date & " " & Time & " 发送结果"
+tex = InputBox("请输入邮件正文自定义段")
+For m = 1 To i
+Err.Clear
+linkman = ""
+emailx = ""
+Set bbb = Sht.Range("a:a").Find(FN(m, 3))
+If bbb Is Nothing Then
+rownew = Sht.Range("a60000").End(xlUp).Row + 1
+Sht.Cells(rownew, 1).Value = FN(m, 3)
+Sht.Cells(rownew, colnew).Value = "未找到发件人"
+mg = mg & FN(m, 3) & Left(" ", 10 - Len(FN(m, 3)) * 2) & "未找到发件人" & Chr(13)
+GoTo line5
+End If
+For n = 1 To Sht.Range("a60000").End(xlUp).Row '循环查找联系人姓名和邮件地址
+If FN(m, 3) = Sht.Cells(n, 1).Value Then
+linkman = linkman & Sht.Cells(n, 2).Value & "、"
+emailx = emailx & Replace(Sht.Cells(n, 7).Value, ";", "") & ","
+End If
+Next
+If Len(emailx) < 2 Then '如果邮件地址是空,那就不发送本城市
+bbb.Offset(0, colnew - 1).Value = "无邮件地址"
+mg = mg & FN(m, 3) & Left(" ", 10 - Len(FN(m, 3)) * 2) & "无邮件地址" & Chr(13)
+GoTo line5
+End If
+linkman = Left(linkman, Len(linkman) - 1) '删掉最后一个符号
+emailx = Left(emailx, Len(emailx) - 1)
+
+Set cm = CreateObject("CDO.Message") '创建对象
+cm.From = UserName '设置发信人的邮箱
+cm.To = emailx '设置收信人的邮箱
+cm.Subject = FN(m, 1) '设定邮件的主题
+cm.TextBody = "亲爱的********：" _
+& Chr(10) & " 附件为 " & FN(m, 1) & "，请查收。" & Chr(10) & tex _
+& Chr(10) & "谢谢！" _
+& Chr(10) & " _______________________________________________________" _
+& Chr(10) & " **部门 " _
+& Chr(10) & " 姓名 " _
+& Chr(10) & " 手机：********* " _
+& Chr(10) & " 电话：********* " _
+& Chr(10) & " Email：********* " _
+& Chr(10) & " 地址：****************** " '邮件正文
+cm.AddAttachment Pth & FN(m, 1) & "." & FN(m, 2) '添加附件
+stUl = "http://schemas.microsoft.com/cdo/configuration/"
+With cm.Configuration.Fields
+.Item(stUl & "smtpserver") = "http://mail.qq.com" 'SMTP服务器地址
+.Item(stUl & "smtpserverport") = 25 'SMTP服务器端口
+.Item(stUl & "sendusing") = 2 '发送端口
+.Item(stUl & "smtpauthenticate") = 1
+.Item(stUl & "sendusername") = UserName '发送方邮箱名称
+.Item(stUl & "sendpassword") = UserPass '发送方邮箱密码"
+.Update
+End With
+cm.Send '发送
+'生成反馈信息
+If Err.Number = 0 Then
+mg = mg & FN(m, 3) & Left(" ", 10 - Len(FN(m, 3)) * 2) & "发送成功" & Chr(13)
+bbb.Offset(0, colnew - 1).Value = "发送成功"
+Else
+mg = mg & FN(m, 3) & Left(" ", 10 - Len(FN(m, 3)) * 2) & "发送失败" & Chr(13)
+bbb.Offset(0, colnew - 1).Value = "发送失败"
+End If
+Set cm = Nothing '发送成功后即时释放对象
+line5:
+Next
+MsgBox (Left(mg, Len(mg) - 1)) '确认结果
+End Sub
